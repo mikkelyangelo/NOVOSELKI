@@ -1,70 +1,34 @@
 import streamlit as st
 import pandas as pd
-import psycopg2
 import os
 from PIL import Image
-import urllib.parse
 
-# Параметры подключения к базе данных PostgreSQL
-DATABASE_URL = "postgresql://postgres:wXAAYeuLBurSAenRDDJVJZKmaPmfYpiO@roundhouse.proxy.rlwy.net:49719/railway"
-
-url = urllib.parse.urlparse(DATABASE_URL)
-
-DB_HOST = url.hostname
-DB_NAME = url.path[1:]  # Удаляем первый символ '/'
-DB_USER = url.username
-DB_PASS = url.password
-DB_PORT = url.port
-
+# Путь к CSV-файлу
+CSV_FILE = 'wishlist.csv'
 images_dir = 'images'
 
 if not os.path.exists(images_dir):
     os.makedirs(images_dir)
 
-
-def init_db():
-    try:
-        conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS, port=DB_PORT)
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS wishlist (
-                id SERIAL PRIMARY KEY,
-                item TEXT NOT NULL,
-                checked BOOLEAN NOT NULL,
-                link TEXT,
-                image TEXT
-            )
-        ''')
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        st.error(f"Ошибка при инициализации базы данных: {e}")
-
+def init_csv():
+    # Инициализация CSV-файла, если он не существует
+    if not os.path.exists(CSV_FILE):
+        df = pd.DataFrame(columns=['item', 'checked', 'link', 'image'])
+        df.to_csv(CSV_FILE, index=False)
 
 def load_wishlist():
     try:
-        conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS, port=DB_PORT)
-        wishlist_df = pd.read_sql_query("SELECT * FROM wishlist", conn)
-        conn.close()
+        wishlist_df = pd.read_csv(CSV_FILE)
         return wishlist_df
     except Exception as e:
         st.error(f"Ошибка при загрузке вишлиста: {e}")
         return pd.DataFrame(columns=['item', 'checked', 'link', 'image'])  # Возвращаем пустой DataFrame
 
-
 def save_wishlist(wishlist_df):
     try:
-        conn = psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS, port=DB_PORT)
-        c = conn.cursor()
-        c.execute("DELETE FROM wishlist")  # Удаляем все записи
-        for _, row in wishlist_df.iterrows():
-            c.execute("INSERT INTO wishlist (item, checked, link, image) VALUES (%s, %s, %s, %s)",
-                      (row['item'], row['checked'], row['link'], row['image']))
-        conn.commit()
-        conn.close()
+        wishlist_df.to_csv(CSV_FILE, index=False)  # Сохраняем DataFrame в CSV
     except Exception as e:
         st.error(f"Ошибка при сохранении вишлиста: {e}")
-
 
 def update_wishlist(wishlist_df):
     indices_to_delete = []
@@ -89,8 +53,7 @@ def update_wishlist(wishlist_df):
 
     if st.button("❌ Удалить выбранные"):
         if indices_to_delete:
-            wishlist_df = wishlist_df.drop(indices_to_delete).reset_index(
-                drop=True)  # Удаляем элементы и обновляем индексы
+            wishlist_df = wishlist_df.drop(indices_to_delete).reset_index(drop=True)  # Удаляем элементы и обновляем индексы
             save_wishlist(wishlist_df)  # Сохраняем изменения
             st.success("Выбранные элементы удалены из вишлиста!")
         else:
@@ -98,10 +61,9 @@ def update_wishlist(wishlist_df):
 
     return wishlist_df
 
-
 st.title("🛍️ Вишлист")
 
-init_db()
+init_csv()
 
 if 'wishlist_df' not in st.session_state:
     st.session_state.wishlist_df = load_wishlist()
